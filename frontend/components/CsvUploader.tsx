@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { UploadCloud, FileText, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, Loader2, Download, ChevronDown, ChevronUp } from "lucide-react";
+import ResultsTable from "./ResultsTable";
 
 type UploadStatus = "idle" | "loading" | "success" | "error";
 
@@ -11,6 +12,7 @@ export default function CsvUploader() {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [result, setResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [showSkipped, setShowSkipped] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -55,6 +57,37 @@ export default function CsvUploader() {
       setErrorMessage("Failed to process the file. Please try again.");
       setStatus("error");
     }
+  };
+
+  const downloadJson = () => {
+    if (!result) return;
+    const blob = new Blob([JSON.stringify(result.records, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "crm-records.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadCsv = () => {
+    if (!result || result.records.length === 0) return;
+    const headers = Object.keys(result.records[0]);
+    const csvRows = [
+      headers.join(","),
+      ...result.records.map((record: any) =>
+        headers.map((h) => `"${String(record[h] ?? "").replace(/"/g, '""')}"`).join(",")
+      ),
+    ];
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "crm-records.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -103,11 +136,50 @@ export default function CsvUploader() {
       )}
 
       {status === "success" && result && (
-        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
-          <p className="text-sm font-medium text-green-800 dark:text-green-300">
-            ✅ Processed {result.totalRows} rows — {result.importedCount} imported,{" "}
-            {result.skippedCount} skipped.
-          </p>
+        <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
+            <p className="text-sm font-medium text-green-800 dark:text-green-300">
+              ✅ Processed {result.totalRows} rows — {result.importedCount} imported,{" "}
+              {result.skippedCount} skipped.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={downloadJson}
+                className="flex items-center gap-1 rounded-md border border-green-300 bg-white px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100 dark:border-green-800 dark:bg-transparent dark:text-green-300"
+              >
+                <Download className="h-4 w-4" /> JSON
+              </button>
+              <button
+                onClick={downloadCsv}
+                className="flex items-center gap-1 rounded-md border border-green-300 bg-white px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100 dark:border-green-800 dark:bg-transparent dark:text-green-300"
+              >
+                <Download className="h-4 w-4" /> CSV
+              </button>
+            </div>
+          </div>
+
+          <ResultsTable records={result.records} />
+
+          {result.skipped.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+              <button
+                onClick={() => setShowSkipped(!showSkipped)}
+                className="flex w-full items-center justify-between p-4 text-left text-sm font-medium text-amber-800 dark:text-amber-300"
+              >
+                <span>⚠️ {result.skipped.length} record(s) skipped</span>
+                {showSkipped ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              {showSkipped && (
+                <div className="space-y-2 border-t border-amber-200 p-4 dark:border-amber-900">
+                  {result.skipped.map((item: any, i: number) => (
+                    <div key={i} className="text-sm text-amber-700 dark:text-amber-400">
+                      <span className="font-medium">Reason:</span> {item.reason}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
