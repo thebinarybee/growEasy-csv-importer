@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import Papa from "papaparse";
 import { UploadCloud, FileText, Loader2, Download, ChevronDown, ChevronUp } from "lucide-react";
 import ResultsTable from "./ResultsTable";
 
@@ -9,17 +10,30 @@ type UploadStatus = "idle" | "loading" | "success" | "error";
 
 export default function CsvUploader() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([]);
+  const [previewColumns, setPreviewColumns] = useState<string[]>([]);
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [result, setResult] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [showSkipped, setShowSkipped] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      setSelectedFile(acceptedFiles[0]);
-      setStatus("idle");
-      setResult(null);
-    }
+    if (acceptedFiles.length === 0) return;
+
+    const file = acceptedFiles[0];
+    setSelectedFile(file);
+    setStatus("idle");
+    setResult(null);
+
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      preview: 10,
+      complete: (results) => {
+        setPreviewRows(results.data);
+        setPreviewColumns(results.meta.fields ?? []);
+      },
+    });
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -91,7 +105,7 @@ export default function CsvUploader() {
   };
 
   return (
-    <div className="w-full max-w-xl">
+    <div className="w-full max-w-5xl">
       <div
         {...getRootProps()}
         className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-12 text-center transition-colors cursor-pointer
@@ -111,23 +125,56 @@ export default function CsvUploader() {
         )}
       </div>
 
-      {selectedFile && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-zinc-500" />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-              {selectedFile.name}
-            </span>
+      {selectedFile && previewRows.length > 0 && status === "idle" && (
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-zinc-500" />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {selectedFile.name} — showing first {previewRows.length} rows
+              </span>
+            </div>
+            <button
+              onClick={handleConfirmImport}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              Confirm Import
+            </button>
           </div>
 
-          <button
-            onClick={handleConfirmImport}
-            disabled={status === "loading"}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {status === "loading" && <Loader2 className="h-4 w-4 animate-spin" />}
-            {status === "loading" ? "Processing..." : "Confirm Import"}
-          </button>
+          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-zinc-100 dark:bg-zinc-800">
+                <tr>
+                  {previewColumns.map((col) => (
+                    <th key={col} className="px-4 py-2 font-medium text-zinc-700 dark:text-zinc-200">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {previewRows.map((row, i) => (
+                  <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+                    {previewColumns.map((col) => (
+                      <td key={col} className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+                        {row[col]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {status === "loading" && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">
+          <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+          <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+            AI is processing your CSV, this may take a moment...
+          </p>
         </div>
       )}
 
