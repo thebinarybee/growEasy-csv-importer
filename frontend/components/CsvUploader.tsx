@@ -40,7 +40,7 @@ export default function CsvUploader() {
     formData.append("file", selectedFile);
 
     try {
-      const response = await fetch("http://localhost:5000/api/upload", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload`, {
         method: "POST",
         body: formData,
       });
